@@ -2278,7 +2278,10 @@ const char* retro_get_system_directory(void)
 
 void retro_get_system_info(struct retro_system_info *info)
 {
-   info->library_name = "Flycast 2021 Low-End";
+   // Keep the historical libretro identity. Frontends such as RetroRun use
+   // this exact value for Flycast 2021 save-state naming and compatibility
+   // workarounds; the Low-End distinction belongs in packaging/UI metadata.
+   info->library_name = "Flycast 2021";
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif
