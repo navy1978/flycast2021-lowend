@@ -552,6 +552,12 @@ struct settings_t
 		bool WidescreenGameHacks;
 		int AnisotropicFiltering;
 		bool PowerVR2Filter;
+		// Experimental low-end GLES optimization. Disabled by default and
+		// exposed as an explicit libretro core option.
+		bool AdjacentStateElision;
+		// Reorders and merges translucent strips for speed. This can violate
+		// PowerVR ordering semantics, so it must remain an explicit opt-in.
+		bool TranslucentStripMerge;
 	} rend;
 
 	struct

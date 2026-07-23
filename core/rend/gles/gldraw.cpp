@@ -237,6 +237,19 @@ __forceinline
 	}
 }
 
+static bool SamePolyState(const PolyParam& left, const PolyParam& right)
+{
+	return left.pcw.full == right.pcw.full
+			&& left.tcw.full == right.tcw.full
+			&& left.tsp.full == right.tsp.full
+			&& left.isp.full == right.isp.full
+			&& left.tcw1.full == right.tcw1.full
+			&& left.tsp1.full == right.tsp1.full
+			&& left.tileclip == right.tileclip
+			&& left.texid == right.texid
+			&& left.texid1 == right.texid1;
+}
+
 template <u32 Type, bool SortingEnabled>
 static void DrawList(const List<PolyParam>& gply, int first, int count)
 {
@@ -251,11 +264,18 @@ static void DrawList(const List<PolyParam>& gply, int first, int count)
 	glcache.StencilFunc(GL_ALWAYS,0,0);
 	glcache.StencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);
 
+	const PolyParam *active_state = NULL;
 	while(count-->0)
 	{
 		if (params->count>2) /* this actually happens for some games. No idea why .. */
 		{
-			SetGPState<Type,SortingEnabled>(params);
+			if (!settings.rend.AdjacentStateElision
+					|| active_state == NULL
+					|| !SamePolyState(*active_state, *params))
+			{
+				SetGPState<Type,SortingEnabled>(params);
+				active_state = params;
+			}
 			glDrawElements(GL_TRIANGLE_STRIP, params->count, gl.index_type,
 						(GLvoid*)(gl.get_index_size() * params->first));
 		}
@@ -611,7 +631,8 @@ void DrawStrips()
 				}
 				else
 				{
-					SortPParams(previous_pass.tr_count, current_pass.tr_count - previous_pass.tr_count);
+					if (!settings.rend.TranslucentStripMerge)
+						SortPParams(previous_pass.tr_count, current_pass.tr_count - previous_pass.tr_count);
 					DrawList<ListType_Translucent, true>(pvrrc.global_param_tr, previous_pass.tr_count, current_pass.tr_count - previous_pass.tr_count );
 				}
 			}

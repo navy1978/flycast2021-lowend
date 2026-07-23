@@ -331,7 +331,7 @@ void retro_init(void)
       perf_get_cpu_features_cb = NULL;
 
    // Set color mode
-   unsigned color_mode = RETRO_PIXEL_FORMAT_XRGB8888;
+   unsigned color_mode = RETRO_PIXEL_FORMAT_RGB565;
    environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &color_mode);
 
    environ_cb(RETRO_ENVIRONMENT_GET_CLEAR_ALL_THREAD_WAITS_CB, &frontend_clear_thread_waits_cb);
@@ -651,6 +651,20 @@ static void update_variables(bool first_startup)
    }
    if (!first_startup && previous_renderer != settings.pvr.rend)
 	  renderer_changed = true;
+
+   var.key = CORE_OPTION_NAME "_adjacent_state_elision";
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.rend.AdjacentStateElision = !strcmp(var.value, "enabled");
+   else
+      settings.rend.AdjacentStateElision = false;
+
+   var.key = CORE_OPTION_NAME "_translucent_strip_merge";
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.rend.TranslucentStripMerge = !strcmp(var.value, "inaccurate");
+   else
+      settings.rend.TranslucentStripMerge = false;
 
    var.key = CORE_OPTION_NAME "_mipmapping";
 
@@ -2264,7 +2278,7 @@ const char* retro_get_system_directory(void)
 
 void retro_get_system_info(struct retro_system_info *info)
 {
-   info->library_name = "Flycast";
+   info->library_name = "Flycast 2021 Low-End";
 #ifndef GIT_VERSION
 #define GIT_VERSION ""
 #endif

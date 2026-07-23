@@ -1414,7 +1414,8 @@ static bool is_vertex_inf(const Vertex& vtx)
 //
 // Create the vertex index, eliminating invalid vertices and merging strips when possible.
 //
-static void make_index(const List<PolyParam> *polys, int first, int end, bool merge, rend_context* ctx)
+static void make_index(const List<PolyParam> *polys, int first, int end, bool merge,
+		rend_context* ctx, bool exact_state = false)
 {
 	const u32 *indices = ctx->idx.head();
 	const Vertex *vertices = ctx->verts.head();
@@ -1431,7 +1432,12 @@ static void make_index(const List<PolyParam> *polys, int first, int end, bool me
 				&& poly->tcw.full == last_poly->tcw.full
 				&& poly->tsp.full == last_poly->tsp.full
 				&& poly->isp.full == last_poly->isp.full
-				// FIXME tcw1, tsp1, tileclip?
+				&& (!exact_state
+						|| (poly->tcw1.full == last_poly->tcw1.full
+							&& poly->tsp1.full == last_poly->tsp1.full
+							&& poly->tileclip == last_poly->tileclip
+							&& poly->texid == last_poly->texid
+							&& poly->texid1 == last_poly->texid1))
 				)
 		{
 			const u32 last_vtx = indices[last_poly->first + last_poly->count - 1];
@@ -1542,6 +1548,42 @@ static void fix_texture_bleeding(const List<PolyParam> *list)
 
 static bool UsingAutoSort(int pass_number);
 
+// Inaccurate opt-in path: sorting translucent strips before index creation
+// makes equally configured neighbours mergeable. The normal path continues
+// to sort at draw time and is unchanged.
+static void sort_poly_params_for_merge(List<PolyParam> *polys, int first, int end,
+		rend_context *ctx)
+{
+	if (end - first <= 1)
+		return;
+
+	Vertex *vertices = ctx->verts.head();
+	PolyParam *begin = &polys->head()[first];
+	PolyParam *finish = &polys->head()[end];
+	for (PolyParam *poly = begin; poly != finish; ++poly)
+	{
+		if (poly->count < 3)
+		{
+			poly->zvZ = 0.f;
+			continue;
+		}
+
+		u32 min_z = 0xffffffff;
+		const Vertex *vertex = &vertices[poly->first];
+		const Vertex *vertex_end = vertex + poly->count;
+		for (; vertex != vertex_end; ++vertex)
+			min_z = std::min(min_z, (const u32&)vertex->z);
+		poly->zvZ = (const float&)min_z;
+	}
+
+	// Preserve Flycast's original PowerVR translucent depth order while
+	// moving the sort before index creation so compatible strips can merge.
+	std::stable_sort(begin, finish,
+			[](const PolyParam& left, const PolyParam& right) {
+				return left.zvZ < right.zvZ;
+			});
+}
+
 bool ta_parse_vdrc(TA_context* ctx)
 {
 	bool rv=false;
@@ -1589,6 +1631,7 @@ bool ta_parse_vdrc(TA_context* ctx)
 			if (pass == 0 || !empty_pass)
 			{
 				RenderPass *render_pass = vd_rc.render_passes.Append();
+				render_pass->autosort = UsingAutoSort(pass);
 				render_pass->op_count = vd_rc.global_param_op.used();
 				make_index(&vd_rc.global_param_op, op_poly_count,
 						render_pass->op_count, true, &vd_rc);
@@ -1599,11 +1642,17 @@ bool ta_parse_vdrc(TA_context* ctx)
 						render_pass->pt_count, true, &vd_rc);
 				pt_poly_count = render_pass->pt_count;
 				render_pass->tr_count = vd_rc.global_param_tr.used();
+				const bool merge_translucent = settings.rend.TranslucentStripMerge
+						&& render_pass->autosort
+						&& settings.pvr.Emulation.AlphaSortMode != 0;
+				if (merge_translucent)
+					sort_poly_params_for_merge(&vd_rc.global_param_tr, tr_poly_count,
+							render_pass->tr_count, &vd_rc);
 				make_index(&vd_rc.global_param_tr, tr_poly_count,
-						render_pass->tr_count, false, &vd_rc);
+						render_pass->tr_count, merge_translucent, &vd_rc,
+						merge_translucent);
 				tr_poly_count = render_pass->tr_count;
 				render_pass->mvo_tr_count = vd_rc.global_param_mvo_tr.used();
-				render_pass->autosort = UsingAutoSort(pass);
 				render_pass->z_clear = ClearZBeforePass(pass);
 			}
 		}

@@ -257,6 +257,40 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "disabled",
 #endif
    },
+   {
+      CORE_OPTION_NAME "_adjacent_state_elision",
+      "Adjacent Render-State Elision (Experimental)",
+      NULL,
+      "Skips redundant GLES state setup for adjacent polygons with an exact "
+      "state match. This is visually validated on the current test matrix, "
+      "but measured performance gains are workload-dependent and may be "
+      "negligible. Keep disabled unless testing.",
+      NULL,
+      "video",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_strip_merge",
+      "Translucent Strip Merge (Inaccurate)",
+      NULL,
+      "Reorders and merges compatible translucent strips to reduce GLES draw "
+      "calls on low-end devices. This can improve performance substantially, "
+      "but may break menus, transparency, or rendering order in some games. "
+      "Disabled preserves the original accurate path.",
+      NULL,
+      "video",
+      {
+         { "disabled",   NULL },
+         { "inaccurate", NULL },
+         { NULL, NULL },
+      },
+      "disabled",
+   },
    {/* TODO: needs explanation */
       CORE_OPTION_NAME "_mipmapping",
       "Mipmapping",
