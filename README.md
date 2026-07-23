@@ -60,6 +60,10 @@ menus or PowerVR ordering. Enable it per game only after visual testing.
 See [the compatibility notes](docs/LOW_END_COMPATIBILITY.md) for the current
 device and game observations.
 
+The development patches, including rejected diagnostics and superseded
+renderer experiments, are preserved in the
+[patch archive](docs/PATCH_ARCHIVE.md).
+
 ## Suggested low-end baseline
 
 Start with the accurate path:
