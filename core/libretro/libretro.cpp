@@ -388,6 +388,8 @@ static void set_variable_visibility(void)
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = CORE_OPTION_NAME "_gdrom_fast_loading";
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
+   option_display.key = CORE_OPTION_NAME "_sh4clock";
+   environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = CORE_OPTION_NAME "_cable_type";
    environ_cb(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = CORE_OPTION_NAME "_broadcast";
@@ -587,6 +589,11 @@ static void update_variables(bool first_startup)
          settings.dynarec.Type = 1;
    }
 
+   var.key = CORE_OPTION_NAME "_sh4clock";
+   settings.dreamcast.sh4clock = 200;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.dreamcast.sh4clock = std::max(1UL, strtoul(var.value, NULL, 0));
+
    var.key = CORE_OPTION_NAME "_boot_to_bios";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
@@ -662,9 +669,60 @@ static void update_variables(bool first_startup)
    var.key = CORE_OPTION_NAME "_translucent_strip_merge";
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-      settings.rend.TranslucentStripMerge = !strcmp(var.value, "inaccurate");
+   {
+      if (!strcmp(var.value, "menu_guarded"))
+         settings.rend.TranslucentStripMerge = 2;
+      else if (!strcmp(var.value, "inaccurate"))
+         settings.rend.TranslucentStripMerge = 1;
+      else
+         settings.rend.TranslucentStripMerge = 0;
+   }
    else
-      settings.rend.TranslucentStripMerge = false;
+      settings.rend.TranslucentStripMerge = 0;
+
+   settings.rend.TranslucentMenuGuardMaxVertices = 8;
+   var.key = CORE_OPTION_NAME "_translucent_menu_guard_max_vertices";
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.rend.TranslucentMenuGuardMaxVertices =
+            std::max(3UL, strtoul(var.value, NULL, 0));
+
+   settings.rend.TranslucentMenuGuardRiskThreshold = 5;
+   var.key = CORE_OPTION_NAME "_translucent_menu_guard_risk";
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.rend.TranslucentMenuGuardRiskThreshold =
+            std::max(1UL, strtoul(var.value, NULL, 0));
+
+   settings.rend.TranslucentMenuGuardDepthTolerance = 0.0001f;
+   var.key = CORE_OPTION_NAME "_translucent_menu_guard_depth_tolerance";
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.rend.TranslucentMenuGuardDepthTolerance =
+            std::max(0.f, strtof(var.value, NULL));
+
+   settings.rend.TranslucentMenuGuardStrategy = 0;
+   var.key = CORE_OPTION_NAME "_translucent_menu_guard_strategy";
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "flat"))
+         settings.rend.TranslucentMenuGuardStrategy = 1;
+      else if (!strcmp(var.value, "all_short"))
+         settings.rend.TranslucentMenuGuardStrategy = 2;
+   }
+
+   settings.rend.TranslucentMenuGuardOverlap = 1;
+   var.key = CORE_OPTION_NAME "_translucent_menu_guard_overlap";
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "disabled"))
+         settings.rend.TranslucentMenuGuardOverlap = 0;
+      else if (!strcmp(var.value, "all"))
+         settings.rend.TranslucentMenuGuardOverlap = 2;
+   }
+
+   settings.rend.TranslucentMenuGuardDrawSorting = 0;
+   var.key = CORE_OPTION_NAME "_translucent_menu_guard_draw_sorting";
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+      settings.rend.TranslucentMenuGuardDrawSorting =
+            !strcmp(var.value, "per_triangle");
 
    var.key = CORE_OPTION_NAME "_mipmapping";
 

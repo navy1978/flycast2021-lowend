@@ -50,8 +50,33 @@ flycast2021_translucent_strip_merge
 Values:
 
 - `disabled` (default): preserves the original translucent rendering order.
-- `inaccurate`: reorders and merges compatible translucent strips to reduce
-  GLES draw submissions.
+- `menu_guarded`: uses the same fast pre-sort, but keeps likely 2D
+  menu/overlay strips as separate draw calls. Detection combines short
+  screen-aligned geometry, nearly constant depth, overlay depth state,
+  screen-edge placement, coverage and overlap. This is conservative and may
+  recover less performance than the aggressive mode.
+- `inaccurate`: aggressively merges compatible translucent strips to reduce
+  GLES draw submissions, preserving the previous experimental behavior.
+
+The guarded detector is intentionally configurable without rebuilding:
+
+```ini
+flycast2021_translucent_menu_guard_strategy = scored
+flycast2021_translucent_menu_guard_max_vertices = 8
+flycast2021_translucent_menu_guard_risk = 5
+flycast2021_translucent_menu_guard_depth_tolerance = 0.0001
+flycast2021_translucent_menu_guard_overlap = risky
+flycast2021_translucent_menu_guard_draw_sorting = standard
+```
+
+For a menu not detected by the default profile, first try
+`max_vertices = 16`, then `strategy = flat`. `strategy = all_short` is the
+broadest diagnostic mode: it is useful to confirm that retaining the suspected
+draw boundaries fixes the menu, but it can give back much of the performance
+gain. If geometric protection is insufficient, use
+`draw_sorting = per_triangle`: this retains guarded strip preprocessing while
+submitting translucent geometry through the compatibility draw path. Once the
+relevant geometry is identified, reduce the scope again.
 
 This is the main low-end performance option. Tests on an AmberELEC RG351V
 showed scene-dependent gains around 12–18%, but it can break transparency,
@@ -59,6 +84,27 @@ menus or PowerVR ordering. Enable it per game only after visual testing.
 
 See [the compatibility notes](docs/LOW_END_COMPATIBILITY.md) for the current
 device and game observations.
+
+### SH4 CPU Clock
+
+Key:
+
+```text
+flycast2021_sh4clock
+```
+
+Values range from `50` to `400` MHz, with the accurate Dreamcast default at
+`200` MHz.
+
+- `200` (default): preserves the original Flycast 2021 decoder path exactly.
+- Other values: experimentally underclock or overclock the emulated SH4 and
+  may change game timing, compatibility or performance.
+
+This option is retained for per-game experimentation. It is not enabled
+automatically and the RG351V Sonic Adventure 2 benchmark did not show a
+performance benefit from underclocking. See
+[the SH4 clock notes](docs/SH4_CLOCK_EXPERIMENT.md) for measurements and
+compatibility details.
 
 The development patches, including rejected diagnostics and superseded
 renderer experiments, are preserved in the
@@ -71,17 +117,27 @@ Start with the accurate path:
 ```ini
 flycast2021_adjacent_state_elision = disabled
 flycast2021_translucent_strip_merge = disabled
+flycast2021_sh4clock = 200
 ```
 
 For a game already verified with the faster translucent path:
 
 ```ini
+flycast2021_sh4clock = 200
 flycast2021_adjacent_state_elision = disabled
-flycast2021_translucent_strip_merge = inaccurate
+flycast2021_translucent_strip_merge = menu_guarded
+flycast2021_translucent_menu_guard_strategy = all_short
+flycast2021_translucent_menu_guard_max_vertices = 64
+flycast2021_translucent_menu_guard_risk = 5
+flycast2021_translucent_menu_guard_depth_tolerance = 0.01
+flycast2021_translucent_menu_guard_overlap = all
+flycast2021_translucent_menu_guard_draw_sorting = per_triangle
 ```
 
-Do not make the inaccurate mode a global default. A setting that works well
-for one Dreamcast title can damage another title's menus.
+If the guarded mode is visually correct but not fast enough, test
+`inaccurate` per game. Do not make either experimental merge mode a global
+default. A setting that works well for one Dreamcast title can damage another
+title's menus.
 
 ## Building the libretro core
 

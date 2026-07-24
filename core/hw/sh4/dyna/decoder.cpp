@@ -1131,8 +1131,20 @@ _end:
 	if (mmu_enabled())
 		blk->guest_cycles *= 1.5f;
 
-	//make sure we don't use wayy-too-many cycles
-	blk->guest_cycles = std::min(blk->guest_cycles,max_cycles);
+	if (settings.dreamcast.sh4clock == 200)
+	{
+		// Preserve Flycast 2021's original path exactly at the default.
+		blk->guest_cycles = std::min(blk->guest_cycles,max_cycles);
+	}
+	else
+	{
+		// Model SH4 under/overclocking by changing the number of guest cycles
+		// assigned to the compiled block. This follows current Flycast and is
+		// kept behind an explicit core option.
+		const u32 clock = std::max(1U, settings.dreamcast.sh4clock);
+		blk->guest_cycles = static_cast<u32>(
+			(static_cast<u64>(blk->guest_cycles) * 200U + clock / 2U) / clock);
+	}
 	//make sure we don't use wayy-too-few cycles
 	blk->guest_cycles = std::max(1U,blk->guest_cycles);
 	blk=0;

@@ -99,6 +99,13 @@ static void SetBaseClipping()
 		glcache.Disable(GL_SCISSOR_TEST);
 }
 
+static bool UsePerTriangleTranslucentSorting()
+{
+	return settings.pvr.Emulation.AlphaSortMode == 0
+			|| (settings.rend.TranslucentStripMerge == 2
+				&& settings.rend.TranslucentMenuGuardDrawSorting == 1);
+}
+
 template <u32 Type, bool SortingEnabled>
 __forceinline
 	void SetGPState(const PolyParam* gp,u32 cflip=0)
@@ -224,7 +231,7 @@ __forceinline
 		glcache.DepthFunc(Zfunction[gp->isp.DepthMode]);
 	}
 
-	if (SortingEnabled && settings.pvr.Emulation.AlphaSortMode == 0)
+	if (SortingEnabled && UsePerTriangleTranslucentSorting())
 		glcache.DepthMask(GL_FALSE);
 	else
 	{
@@ -624,14 +631,14 @@ void DrawStrips()
 		{
 			if (current_pass.autosort)
 			{
-				if (settings.pvr.Emulation.AlphaSortMode == 0)
+				if (UsePerTriangleTranslucentSorting())
 				{
 					SortTriangles(previous_pass.tr_count, current_pass.tr_count - previous_pass.tr_count);
 					DrawSorted(render_pass < pvrrc.render_passes.used() - 1);
 				}
 				else
 				{
-					if (!settings.rend.TranslucentStripMerge)
+					if (settings.rend.TranslucentStripMerge == 0)
 						SortPParams(previous_pass.tr_count, current_pass.tr_count - previous_pass.tr_count);
 					DrawList<ListType_Translucent, true>(pvrrc.global_param_tr, previous_pass.tr_count, current_pass.tr_count - previous_pass.tr_count );
 				}

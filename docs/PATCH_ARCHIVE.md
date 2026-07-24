@@ -1,13 +1,13 @@
 # Flycast 2021 experiment archive
 
-`patches/flycast2021-experiments-2026-07-23.zip` preserves the 27 Flycast and
+`patches/flycast2021-experiments-2026-07-23.zip` preserves the 28 Flycast and
 Flycast 2021 patches produced during the RK3326 optimization work. The archive
 also contains `PATCHES-SHA256.txt`, with a SHA-256 digest for every patch.
 
 Archive SHA-256:
 
 ```text
-2a0c8ef2515b251c5561d5cf5088ffcfd049e236da3c1b29ddcb9743a6a905fc
+c1c40fa2dc29c6d9ee9c730743340609fcdf0242d53a0033b71287fcd36d4719
 ```
 
 ## Integrated in this fork
@@ -16,8 +16,9 @@ The implementation at commit `aaf6d44c` contains the complete result of
 `flycast2021-configurable-render-options.patch`:
 
 - `flycast2021_adjacent_state_elision`, disabled by default;
-- `flycast2021_translucent_strip_merge`, disabled by default, with the
-  explicitly inaccurate mode selected by the `inaccurate` value;
+- `flycast2021_translucent_strip_merge`, disabled by default, with
+  `menu_guarded` and `inaccurate` opt-in modes;
+- configurable menu-guard heuristics for translucent strip merging;
 - exact-state checks including the second texture ID;
 - the corrected original translucent depth order before index generation;
 - Flycast 2021 option prefix, RGB565 low-end compatibility and core identity.
@@ -45,6 +46,11 @@ Several candidates measured neutral or worse performance, while some
 translucent variants produced visual regressions. Their presence in the
 archive does not imply that they should be applied together or enabled by
 default.
+
+The 2026-07-24 archive update adds
+`flycast2021-sh4clock-option-experimental.patch`. Its 200 MHz default preserves
+the original decoder path; other values deliberately change emulated SH4
+timing and must remain opt-in. See `SH4_CLOCK_EXPERIMENT.md`.
 
 ## Compatibility audit
 

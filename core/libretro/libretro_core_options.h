@@ -100,6 +100,33 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    },
 #endif
    {
+      CORE_OPTION_NAME "_sh4clock",
+      "SH4 CPU Under/Overclock",
+      NULL,
+      "Changes the emulated SH4 clock. Underclocking may reduce host CPU load on slow devices, but changes game timing. Use with caution.",
+      NULL,
+      "hacks",
+      {
+         { "50",  "50 MHz" },
+         { "75",  "75 MHz" },
+         { "100", "100 MHz" },
+         { "120", "120 MHz" },
+         { "140", "140 MHz" },
+         { "160", "160 MHz" },
+         { "180", "180 MHz" },
+         { "200", "200 MHz (Default)" },
+         { "220", "220 MHz" },
+         { "240", "240 MHz" },
+         { "260", "260 MHz" },
+         { "280", "280 MHz" },
+         { "300", "300 MHz" },
+         { "350", "350 MHz" },
+         { "400", "400 MHz" },
+         { NULL, NULL },
+      },
+      "200",
+   },
+   {
       CORE_OPTION_NAME "_boot_to_bios",
       "Boot to BIOS (Restart Required)",
       NULL,
@@ -276,20 +303,133 @@ struct retro_core_option_v2_definition option_defs_us[] = {
    },
    {
       CORE_OPTION_NAME "_translucent_strip_merge",
-      "Translucent Strip Merge (Inaccurate)",
+      "Translucent Strip Merge (Experimental)",
       NULL,
       "Reorders and merges compatible translucent strips to reduce GLES draw "
       "calls on low-end devices. This can improve performance substantially, "
       "but may break menus, transparency, or rendering order in some games. "
+      "Menu Guard keeps likely 2D menu/overlay strips as separate draws. "
+      "Aggressive preserves the previous fastest inaccurate behavior. "
       "Disabled preserves the original accurate path.",
       NULL,
       "video",
       {
-         { "disabled",   NULL },
-         { "inaccurate", NULL },
+         { "disabled",     NULL },
+         { "menu_guarded", "Menu Guard" },
+         { "inaccurate",   "Aggressive (Inaccurate)" },
          { NULL, NULL },
       },
       "disabled",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_menu_guard_strategy",
+      "Menu Guard Strategy",
+      NULL,
+      "Controls which translucent strips Menu Guard keeps as separate draws. "
+      "Scored combines several menu-like signals. Flat protects every short "
+      "constant-depth strip. All Short is the broadest diagnostic setting.",
+      NULL,
+      "video",
+      {
+         { "scored",    "Scored Heuristic" },
+         { "flat",      "All Flat Short Strips" },
+         { "all_short", "All Short Strips" },
+         { NULL, NULL },
+      },
+      "scored",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_menu_guard_max_vertices",
+      "Menu Guard Maximum Vertices",
+      NULL,
+      "Maximum source vertex count considered by Menu Guard. Raise this when "
+      "a menu is built from longer strips. Higher values can reduce the "
+      "performance benefit of translucent strip merging.",
+      NULL,
+      "video",
+      {
+         { "4",  NULL },
+         { "8",  "8 (Default)" },
+         { "16", NULL },
+         { "32", NULL },
+         { "64", NULL },
+         { NULL, NULL },
+      },
+      "8",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_menu_guard_risk",
+      "Menu Guard Risk Threshold",
+      NULL,
+      "Minimum heuristic risk score protected by the Scored strategy. Lower "
+      "values recognize more possible menu strips but preserve more draw "
+      "boundaries. Ignored by Flat and All Short strategies.",
+      NULL,
+      "video",
+      {
+         { "3", NULL },
+         { "4", NULL },
+         { "5", "5 (Default)" },
+         { "6", NULL },
+         { "7", NULL },
+         { "8", NULL },
+         { NULL, NULL },
+      },
+      "5",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_menu_guard_depth_tolerance",
+      "Menu Guard Flat-Depth Tolerance",
+      NULL,
+      "Relative depth range considered flat. Raise this when transformed menu "
+      "geometry is not perfectly coplanar. Larger values can also classify "
+      "gameplay effects as menu-like.",
+      NULL,
+      "video",
+      {
+         { "0.000001", "0.000001" },
+         { "0.00001",  "0.00001" },
+         { "0.0001",   "0.0001 (Default)" },
+         { "0.001",    "0.001" },
+         { "0.01",     "0.01" },
+         { NULL, NULL },
+      },
+      "0.0001",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_menu_guard_overlap",
+      "Menu Guard Overlap Protection",
+      NULL,
+      "Controls whether overlapping screen-space bounds prevent a merge. "
+      "Risky requires at least one menu-like strip. All protects every "
+      "overlapping candidate pair.",
+      NULL,
+      "video",
+      {
+         { "disabled", NULL },
+         { "risky",    "Risky Only (Default)" },
+         { "all",      "All Overlaps" },
+         { NULL, NULL },
+      },
+      "risky",
+   },
+   {
+      CORE_OPTION_NAME "_translucent_menu_guard_draw_sorting",
+      "Menu Guard Draw Sorting",
+      NULL,
+      "Controls translucent draw submission after Menu Guard preprocessing. "
+      "Standard follows the selected core alpha-sort mode. Per-Triangle keeps "
+      "the guarded strip preprocessing but uses the per-triangle draw path; "
+      "this can restore menus that remain broken with geometric detection, "
+      "at an additional CPU cost.",
+      NULL,
+      "video",
+      {
+         { "standard",     "Standard (Default)" },
+         { "per_triangle", "Per-Triangle Compatibility" },
+         { NULL, NULL },
+      },
+      "standard",
    },
    {/* TODO: needs explanation */
       CORE_OPTION_NAME "_mipmapping",

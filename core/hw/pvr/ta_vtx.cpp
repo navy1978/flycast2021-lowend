@@ -1411,23 +1411,174 @@ static bool is_vertex_inf(const Vertex& vtx)
 			|| std::isnan(vtx.z) || vtx.z < 0.f || vtx.z > 3.4e37f;
 }
 
+struct StripBounds
+{
+	float min_x;
+	float max_x;
+	float min_y;
+	float max_y;
+	float min_z;
+	float max_z;
+	bool valid;
+};
+
+// Menu and HUD geometry is not explicitly tagged by the Dreamcast. Detect
+// only the strongest generic signals: a short, screen-aligned strip at almost
+// constant depth, optionally reinforced by overlay-like depth state, screen
+// coverage or edge placement. False positives merely keep an extra draw call;
+// they do not alter the accurate disabled path or the aggressive mode.
+static unsigned menu_strip_risk(const PolyParam& poly, const rend_context& ctx,
+		StripBounds& bounds, bool& flat_depth)
+{
+	bounds.valid = false;
+	flat_depth = false;
+	if (poly.count < 3
+			|| poly.count > settings.rend.TranslucentMenuGuardMaxVertices)
+		return 0;
+
+	const Vertex *vertices = ctx.verts.head();
+	const Vertex *vertex = &vertices[poly.first];
+	bounds.min_x = bounds.max_x = vertex->x;
+	bounds.min_y = bounds.max_y = vertex->y;
+	bounds.min_z = bounds.max_z = vertex->z;
+	for (u32 i = 0; i < poly.count; ++i)
+	{
+		const Vertex& vtx = vertices[poly.first + i];
+		if (is_vertex_inf(vtx))
+			return 0;
+		bounds.min_x = std::min(bounds.min_x, vtx.x);
+		bounds.max_x = std::max(bounds.max_x, vtx.x);
+		bounds.min_y = std::min(bounds.min_y, vtx.y);
+		bounds.max_y = std::max(bounds.max_y, vtx.y);
+		bounds.min_z = std::min(bounds.min_z, vtx.z);
+		bounds.max_z = std::max(bounds.max_z, vtx.z);
+	}
+
+	const float width = bounds.max_x - bounds.min_x;
+	const float height = bounds.max_y - bounds.min_y;
+	if (width <= 0.f || height <= 0.f)
+		return 0;
+	bounds.valid = true;
+
+	const float x_tolerance = std::max(0.75f, width * 0.02f);
+	const float y_tolerance = std::max(0.75f, height * 0.02f);
+	unsigned corner_vertices = 0;
+	for (u32 i = 0; i < poly.count; ++i)
+	{
+		const Vertex& vtx = vertices[poly.first + i];
+		const bool on_x_edge = fabsf(vtx.x - bounds.min_x) <= x_tolerance
+				|| fabsf(vtx.x - bounds.max_x) <= x_tolerance;
+		const bool on_y_edge = fabsf(vtx.y - bounds.min_y) <= y_tolerance
+				|| fabsf(vtx.y - bounds.max_y) <= y_tolerance;
+		if (on_x_edge && on_y_edge)
+			++corner_vertices;
+	}
+	const bool screen_aligned = corner_vertices + 1 >= poly.count;
+
+	const float z_scale = std::max(1.f,
+			std::max(fabsf(bounds.min_z), fabsf(bounds.max_z)));
+	flat_depth = bounds.max_z - bounds.min_z
+			<= z_scale * settings.rend.TranslucentMenuGuardDepthTolerance;
+
+	const float clip_min_x = (float)ctx.fb_X_CLIP.min;
+	const float clip_max_x = (float)ctx.fb_X_CLIP.max;
+	const float clip_min_y = (float)ctx.fb_Y_CLIP.min;
+	const float clip_max_y = (float)ctx.fb_Y_CLIP.max;
+	const float clip_width = std::max(1.f, clip_max_x - clip_min_x + 1.f);
+	const float clip_height = std::max(1.f, clip_max_y - clip_min_y + 1.f);
+	const float area_ratio = (width * height) / (clip_width * clip_height);
+	const bool large_overlay = area_ratio >= 0.20f;
+	const float edge_x = clip_width * 0.04f;
+	const float edge_y = clip_height * 0.04f;
+	const bool near_edge = bounds.min_x <= clip_min_x + edge_x
+			|| bounds.max_x >= clip_max_x - edge_x
+			|| bounds.min_y <= clip_min_y + edge_y
+			|| bounds.max_y >= clip_max_y - edge_y;
+
+	unsigned risk = 0;
+	if (screen_aligned)
+		risk += 3;
+	if (flat_depth)
+		risk += 2;
+	if (poly.isp.ZWriteDis)
+		risk += 1;
+	if (poly.isp.DepthMode == 7)
+		risk += 2;
+	if (near_edge)
+		risk += 1;
+	if (large_overlay)
+		risk += 2;
+	return risk;
+}
+
+static bool strip_bounds_overlap(const StripBounds& left, const StripBounds& right)
+{
+	return left.valid && right.valid
+			&& left.min_x < right.max_x && left.max_x > right.min_x
+			&& left.min_y < right.max_y && left.max_y > right.min_y;
+}
+
 //
 // Create the vertex index, eliminating invalid vertices and merging strips when possible.
 //
 static void make_index(const List<PolyParam> *polys, int first, int end, bool merge,
-		rend_context* ctx, bool exact_state = false)
+		rend_context* ctx, bool exact_state = false, bool menu_guard = false)
 {
 	const u32 *indices = ctx->idx.head();
 	const Vertex *vertices = ctx->verts.head();
 
 	PolyParam *last_poly = nullptr;
+	unsigned last_menu_risk = 0;
+	bool last_protected_strip = false;
+	StripBounds last_bounds = {};
 	const PolyParam *end_poly = &polys->head()[end];
 	for (PolyParam *poly = &polys->head()[first]; poly != end_poly; poly++)
 	{
+		StripBounds bounds = {};
+		bool flat_depth = false;
+		const unsigned risk = menu_guard
+				? menu_strip_risk(*poly, *ctx, bounds, flat_depth) : 0;
+		bool protected_strip = false;
+		if (menu_guard)
+		{
+			switch (settings.rend.TranslucentMenuGuardStrategy)
+			{
+				case 1:
+					protected_strip = bounds.valid && flat_depth;
+					break;
+				case 2:
+					protected_strip = bounds.valid;
+					break;
+				default:
+					protected_strip = risk
+							>= settings.rend.TranslucentMenuGuardRiskThreshold;
+					break;
+			}
+		}
+		const bool overlaps_previous = menu_guard && last_poly != nullptr
+				&& strip_bounds_overlap(last_bounds, bounds);
+		bool protected_overlap = false;
+		if (overlaps_previous)
+		{
+			if (settings.rend.TranslucentMenuGuardOverlap == 2)
+				protected_overlap = true;
+			else if (settings.rend.TranslucentMenuGuardOverlap == 1)
+			{
+				const unsigned overlap_risk =
+						settings.rend.TranslucentMenuGuardRiskThreshold > 1
+						? settings.rend.TranslucentMenuGuardRiskThreshold - 1 : 1;
+				protected_overlap = risk >= overlap_risk
+						|| last_menu_risk >= overlap_risk;
+			}
+		}
+		bool merged_with_previous = false;
 		int first_index;
 		bool dupe_next_vtx = false;
 		if (merge
 				&& last_poly != nullptr
+				&& !protected_strip
+				&& !last_protected_strip
+				&& !protected_overlap
 				&& poly->pcw.full == last_poly->pcw.full
 				&& poly->tcw.full == last_poly->tcw.full
 				&& poly->tsp.full == last_poly->tsp.full
@@ -1443,11 +1594,15 @@ static void make_index(const List<PolyParam> *polys, int first, int end, bool me
 			const u32 last_vtx = indices[last_poly->first + last_poly->count - 1];
 			*ctx->idx.Append() = last_vtx;
 			dupe_next_vtx = true;
+			merged_with_previous = true;
 			first_index = last_poly->first;
 		}
 		else
 		{
 			last_poly = poly;
+			last_menu_risk = risk;
+			last_protected_strip = protected_strip;
+			last_bounds = bounds;
 			first_index = ctx->idx.used();
 		}
 		int last_good_vtx = -1;
@@ -1496,6 +1651,21 @@ static void make_index(const List<PolyParam> *polys, int first, int end, bool me
 		{
 			last_poly->count = ctx->idx.used() - last_poly->first;
 			poly->count = 0;
+			if (merged_with_previous)
+			{
+				last_menu_risk = std::max(last_menu_risk, risk);
+				if (!last_bounds.valid)
+					last_bounds = bounds;
+				else if (bounds.valid)
+				{
+					last_bounds.min_x = std::min(last_bounds.min_x, bounds.min_x);
+					last_bounds.max_x = std::max(last_bounds.max_x, bounds.max_x);
+					last_bounds.min_y = std::min(last_bounds.min_y, bounds.min_y);
+					last_bounds.max_y = std::max(last_bounds.max_y, bounds.max_y);
+					last_bounds.min_z = std::min(last_bounds.min_z, bounds.min_z);
+					last_bounds.max_z = std::max(last_bounds.max_z, bounds.max_z);
+				}
+			}
 		}
 	}
 }
@@ -1642,15 +1812,17 @@ bool ta_parse_vdrc(TA_context* ctx)
 						render_pass->pt_count, true, &vd_rc);
 				pt_poly_count = render_pass->pt_count;
 				render_pass->tr_count = vd_rc.global_param_tr.used();
-				const bool merge_translucent = settings.rend.TranslucentStripMerge
+				const bool merge_translucent = settings.rend.TranslucentStripMerge != 0
 						&& render_pass->autosort
 						&& settings.pvr.Emulation.AlphaSortMode != 0;
+				const bool guard_translucent_menus =
+						settings.rend.TranslucentStripMerge == 2;
 				if (merge_translucent)
 					sort_poly_params_for_merge(&vd_rc.global_param_tr, tr_poly_count,
 							render_pass->tr_count, &vd_rc);
 				make_index(&vd_rc.global_param_tr, tr_poly_count,
 						render_pass->tr_count, merge_translucent, &vd_rc,
-						merge_translucent);
+						merge_translucent, guard_translucent_menus);
 				tr_poly_count = render_pass->tr_count;
 				render_pass->mvo_tr_count = vd_rc.global_param_mvo_tr.used();
 				render_pass->z_clear = ClearZBeforePass(pass);

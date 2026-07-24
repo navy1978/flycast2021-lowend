@@ -557,7 +557,19 @@ struct settings_t
 		bool AdjacentStateElision;
 		// Reorders and merges translucent strips for speed. This can violate
 		// PowerVR ordering semantics, so it must remain an explicit opt-in.
-		bool TranslucentStripMerge;
+		// 0: disabled, 1: aggressive/inaccurate, 2: menu-guarded.
+		u32 TranslucentStripMerge;
+		// Tunable heuristics used only by the menu-guarded mode.
+		u32 TranslucentMenuGuardMaxVertices;
+		u32 TranslucentMenuGuardRiskThreshold;
+		f32 TranslucentMenuGuardDepthTolerance;
+		// 0: scored, 1: any flat strip, 2: every short strip.
+		u32 TranslucentMenuGuardStrategy;
+		// 0: disabled, 1: risky overlaps, 2: every overlap.
+		u32 TranslucentMenuGuardOverlap;
+		// 0: use the core alpha-sort mode, 1: submit translucent geometry
+		// through the per-triangle draw path after guarded strip preprocessing.
+		u32 TranslucentMenuGuardDrawSorting;
 	} rend;
 
 	struct
@@ -583,6 +595,7 @@ struct settings_t
 		u32 region;			// 0 -> JP, 1 -> USA, 2 -> EU, 3 -> default
 		u32 broadcast;		// 0 -> NTSC, 1 -> PAL, 2 -> PAL/M, 3 -> PAL/N, 4 -> default
 		u32 language;		// 0 -> JP, 1 -> EN, 2 -> DE, 3 -> FR, 4 -> SP, 5 -> IT, 6 -> default
+		u32 sh4clock;		// emulated SH4 clock in MHz (default 200)
 		bool FullMMU;
 		bool ForceWinCE;
 	} dreamcast;
